@@ -40,4 +40,5 @@ coverage.xml
 
 # Custom
 debug_spacy.py
+data/cache/
 

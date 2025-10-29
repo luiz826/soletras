@@ -5,6 +5,9 @@ Handles loading and caching of word lists from various sources.
 
 import urllib.request
 import os
+import pickle
+import hashlib
+from pathlib import Path
 from typing import List, Optional, Union
 import logging
 
@@ -48,6 +51,10 @@ def get_nlp():
 class WordLoader:
     """Handles loading words from single or multiple URL/file sources."""
     
+    # Cache directory for filtered words and source words
+    CACHE_DIR = Path('data/cache')
+    SOURCE_CACHE_FILE = CACHE_DIR / 'source_words.pkl'
+    
     def __init__(self, sources: Union[str, List[str]]):
         """
         Initialize the word loader.
@@ -63,6 +70,9 @@ class WordLoader:
         
         self._words: List[str] = []
         self._source_stats: dict = {}  # Track stats per source
+        
+        # Ensure cache directory exists
+        self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     
     @property
     def source(self) -> str:
@@ -84,13 +94,114 @@ class WordLoader:
         """Get statistics per source."""
         return self._source_stats
     
+    def _get_sources_cache_key(self) -> str:
+        """
+        Generate cache key based on sources list.
+        
+        Returns:
+            Hash string for cache validation
+        """
+        # Create a stable hash of sources
+        sources_str = '|'.join(sorted(self.sources))
+        return hashlib.md5(sources_str.encode()).hexdigest()
+    
+    def _load_from_source_cache(self) -> Optional[List[str]]:
+        """
+        Load words from source cache (cached downloaded words).
+        
+        Returns:
+            List of cached words, or None if cache miss/invalid
+        """
+        if not self.SOURCE_CACHE_FILE.exists():
+            logger.debug("Source cache file not found")
+            return None
+        
+        try:
+            logger.info(f"Checking source cache: {self.SOURCE_CACHE_FILE.name}")
+            with open(self.SOURCE_CACHE_FILE, 'rb') as f:
+                cached_data = pickle.load(f)
+            
+            # Validate cache
+            if not isinstance(cached_data, dict):
+                logger.warning("Invalid source cache format")
+                return None
+            
+            # Check if sources match
+            cached_key = cached_data.get('sources_key')
+            current_key = self._get_sources_cache_key()
+            
+            if cached_key != current_key:
+                logger.info("Source list changed, cache invalidated")
+                return None
+            
+            words = cached_data.get('words')
+            stats = cached_data.get('source_stats', {})
+            timestamp = cached_data.get('timestamp', 'unknown')
+            
+            if words and isinstance(words, list):
+                self._source_stats = stats
+                logger.info(f"✅ Loaded {len(words)} words from source cache (saved at {timestamp})")
+                return words
+            
+            logger.warning("Invalid cache data")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to load source cache: {e}")
+            return None
+    
+    def _save_to_source_cache(self, words: List[str]) -> None:
+        """
+        Save downloaded words to source cache.
+        
+        Args:
+            words: Word list to cache
+        """
+        try:
+            from datetime import datetime
+            
+            cache_data = {
+                'words': words,
+                'sources_key': self._get_sources_cache_key(),
+                'sources': self.sources,
+                'source_stats': self._source_stats,
+                'timestamp': datetime.now().isoformat(),
+                'word_count': len(words)
+            }
+            
+            logger.info(f"Saving {len(words)} words to source cache: {self.SOURCE_CACHE_FILE.name}")
+            with open(self.SOURCE_CACHE_FILE, 'wb') as f:
+                pickle.dump(cache_data, f)
+            
+            file_size = self.SOURCE_CACHE_FILE.stat().st_size / 1024
+            logger.info(f"✅ Source cache saved successfully ({file_size:.1f} KB)")
+            
+        except Exception as e:
+            logger.error(f"Failed to save source cache: {e}")
+    
     def load(self) -> None:
         """
         Load words from all configured sources and merge them.
+        Uses cache to avoid re-downloading if sources haven't changed.
         
         Raises:
             Exception: If all sources fail to load
         """
+        # Try to load from source cache first
+        cached_words = self._load_from_source_cache()
+        
+        if cached_words is not None:
+            # Cache hit - use cached words
+            self._words = cached_words
+            logger.info(
+                f"✅ Using source cache - {len(self._words)} words loaded instantly! "
+                f"(from {len(self.sources)} source(s))"
+            )
+            return
+        
+        # Cache miss - need to download from sources
+        logger.info("⚙️ Source cache miss - downloading from sources...")
+        
         all_words = set()  # Use set to automatically deduplicate
         successful_loads = 0
         failed_sources = []
@@ -130,6 +241,9 @@ class WordLoader:
         
         # Convert set to sorted list
         self._words = sorted(list(all_words))
+        
+        # Save to source cache for next time
+        self._save_to_source_cache(self._words)
         
         logger.info(
             f"Successfully loaded {self.word_count} unique words from "
@@ -329,6 +443,102 @@ class WordLoader:
         logger.debug(f"Parsed .dic file: {len(palavras)} unique words")
         return sorted(list(palavras))
     
+    def _get_cache_key(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> str:
+        """
+        Generate cache key based on filter settings and word count.
+        
+        Args:
+            remove_plurals: Whether plurals are removed
+            remove_conjugated_verbs: Whether conjugated verbs are removed
+        
+        Returns:
+            Hash string for cache filename
+        """
+        # Include word count to invalidate cache when word list changes
+        word_count = len(self._words)
+        key = f"words_{self._words}_pl_{remove_plurals}_vb_{remove_conjugated_verbs}"
+        return hashlib.md5(key.encode()).hexdigest()
+    
+    def _get_cache_filepath(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> Path:
+        """Get cache file path for given filter settings."""
+        cache_key = self._get_cache_key(remove_plurals, remove_conjugated_verbs)
+        return self.CACHE_DIR / f"filtered_{cache_key}.pkl"
+    
+    def _load_from_disk_cache(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> Optional[List[str]]:
+        """
+        Load filtered words from disk cache.
+        
+        Args:
+            remove_plurals: Plural filter setting
+            remove_conjugated_verbs: Verb filter setting
+        
+        Returns:
+            List of cached filtered words, or None if cache miss
+        """
+        cache_file = self._get_cache_filepath(remove_plurals, remove_conjugated_verbs)
+        
+        if cache_file.exists():
+            try:
+                logger.info(f"Loading from disk cache: {cache_file.name}")
+                with open(cache_file, 'rb') as f:
+                    cached_data = pickle.load(f)
+                    
+                # Validate cache data
+                if isinstance(cached_data, dict) and 'words' in cached_data:
+                    words = cached_data['words']
+                    logger.info(f"✅ Loaded {len(words)} words from disk cache (saved at {cached_data.get('timestamp', 'unknown')})")
+                    return words
+                elif isinstance(cached_data, list):
+                    # Legacy format
+                    logger.info(f"✅ Loaded {len(cached_data)} words from disk cache")
+                    return cached_data
+                else:
+                    logger.warning("Invalid cache format, will regenerate")
+                    return None
+            except Exception as e:
+                logger.warning(f"Failed to load cache: {e}, will regenerate")
+                return None
+        
+        logger.debug("Cache miss - file not found")
+        return None
+    
+    def _save_to_disk_cache(
+        self,
+        remove_plurals: bool,
+        remove_conjugated_verbs: bool,
+        words: List[str]
+    ) -> None:
+        """
+        Save filtered words to disk cache.
+        
+        Args:
+            remove_plurals: Plural filter setting
+            remove_conjugated_verbs: Verb filter setting
+            words: Filtered word list to cache
+        """
+        cache_file = self._get_cache_filepath(remove_plurals, remove_conjugated_verbs)
+        
+        try:
+            from datetime import datetime
+            
+            cache_data = {
+                'words': words,
+                'timestamp': datetime.now().isoformat(),
+                'word_count': len(words),
+                'filters': {
+                    'remove_plurals': remove_plurals,
+                    'remove_conjugated_verbs': remove_conjugated_verbs
+                }
+            }
+            
+            logger.info(f"Saving {len(words)} words to disk cache: {cache_file.name}")
+            with open(cache_file, 'wb') as f:
+                pickle.dump(cache_data, f)
+            
+            logger.info(f"✅ Cache saved successfully ({cache_file.stat().st_size / 1024:.1f} KB)")
+        except Exception as e:
+            logger.error(f"Failed to save cache: {e}")
+    
     def filter_words(
         self,
         remove_plurals: bool = True,
@@ -337,6 +547,7 @@ class WordLoader:
     ) -> int:
         """
         Filter words based on specified criteria using SpaCy for linguistic analysis.
+        Uses disk cache to avoid reprocessing.
         
         Args:
             remove_plurals: Remove words that are in plural form
@@ -352,6 +563,22 @@ class WordLoader:
         
         original_count = len(self._words)
         
+        # Try to load from disk cache first
+        cached_words = self._load_from_disk_cache(remove_plurals, remove_conjugated_verbs)
+        
+        if cached_words is not None:
+            # Cache hit!
+            self._words = cached_words
+            removed = original_count - len(self._words)
+            logger.info(
+                f"✅ Used disk cache - {removed} words filtered. "
+                f"{len(self._words)} words remaining."
+            )
+            return removed
+        
+        # Cache miss - need to process
+        logger.info("⚙️ Cache miss - processing words with filters...")
+        
         if use_spacy:
             filtered_words = self._filter_with_spacy(remove_plurals, remove_conjugated_verbs)
         else:
@@ -360,6 +587,9 @@ class WordLoader:
             for word in self._words:
                 if self._should_keep_word_rule_based(word, remove_plurals, remove_conjugated_verbs):
                     filtered_words.append(word)
+        
+        # Save to disk cache for next time
+        self._save_to_disk_cache(remove_plurals, remove_conjugated_verbs, filtered_words)
         
         self._words = filtered_words
         removed = original_count - len(self._words)
@@ -392,7 +622,7 @@ class WordLoader:
         filtered_words = []
         
         # Process words in batches for efficiency
-        batch_size = 1000
+        batch_size = 5000  # Increased from 1000 for better performance
         total_words = len(self._words)
         
         logger.info(f"Processing {total_words} words with SpaCy (batch size: {batch_size})...")

@@ -7,7 +7,7 @@ Flask-based REST API for Brazilian Portuguese word search with advanced NLP filt
 - 🔍 **Smart Word Search**: Find words based on allowed/required letters
 - 🧠 **NLP Filtering with SpaCy**: Remove plurals and conjugated verbs using linguistic analysis
 - ⚡ **Intelligent Cache**: LRU cache for filtered word lists (up to 200x faster)
-- 📚 **Large Database**: 253,989+ unique Portuguese words
+- 📚 **Large Database**: 550,633+ unique Portuguese words
 - 🚀 **High Performance**: Optimized batch processing and caching
 - 🧪 **Well Tested**: 61+ tests with 88% coverage
 - 🔧 **Flexible Configuration**: Environment variables and code-based config
@@ -139,9 +139,10 @@ GET /api/sources
 
 ## 📊 Word Database
 
-Currently loads **253,989 unique words** from:
+Currently loads **550,633+ unique words** from:
 - IME-USP Brazilian Portuguese dictionary
 - BSI word list
+- LibreOffice pt_BR dictionary (.dic format)
 
 ## 🧪 Testing
 

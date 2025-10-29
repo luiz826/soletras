@@ -71,20 +71,11 @@ def create_app(env: Optional[str] = None) -> Flask:
                 if stats['status'] == 'success':
                     logger.debug(f"  - {source_name}: {stats['words_loaded']} words")
         
-        # Apply word filters if enabled
-        if hasattr(config_class, 'FILTER_PLURALS') or hasattr(config_class, 'FILTER_CONJUGATED_VERBS'):
-            filter_plurals = getattr(config_class, 'FILTER_PLURALS', False)
-            filter_verbs = getattr(config_class, 'FILTER_CONJUGATED_VERBS', False)
-            use_spacy = getattr(config_class, 'USE_SPACY_FILTER', True)
-            
-            if filter_plurals or filter_verbs:
-                logger.info("Applying word filters...")
-                removed = word_loader.filter_words(
-                    remove_plurals=filter_plurals,
-                    remove_conjugated_verbs=filter_verbs,
-                    use_spacy=use_spacy
-                )
-                logger.info(f"Filtered {removed} words. {word_loader.word_count} words remaining.")
+        # NOTE: Word filtering is now done on-demand in the API endpoint
+        # This avoids expensive SpaCy processing on startup
+        # Filters are applied dynamically based on request parameters
+        logger.info("Word filtering will be applied on-demand per request")
+        
     except Exception as e:
         logger.error(f"Failed to load words: {e}")
         logger.warning("Starting with empty word list")
