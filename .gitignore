@@ -38,5 +38,6 @@ htmlcov/
 coverage.xml
 *.coveragerc
 
-# Local word files (if you want to use custom lists)
-# palavras.txt
+# Custom
+debug_spacy.py
+
