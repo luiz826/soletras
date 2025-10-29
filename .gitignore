@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask
+instance/
+.env
+*.log
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+*.cover
+.hypothesis/
+coverage.xml
+*.coveragerc
+
+# Local word files (if you want to use custom lists)
+# palavras.txt
