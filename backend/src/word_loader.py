@@ -55,6 +55,9 @@ class WordLoader:
     CACHE_DIR = Path('data/cache')
     SOURCE_CACHE_FILE = CACHE_DIR / 'source_words.pkl'
     
+    # Preprocessed directory for pre-computed filtered words (no SpaCy needed)
+    PREPROCESSED_DIR = Path('data/preprocessed')
+    
     def __init__(self, sources: Union[str, List[str]]):
         """
         Initialize the word loader.
@@ -182,12 +185,28 @@ class WordLoader:
     def load(self) -> None:
         """
         Load words from all configured sources and merge them.
-        Uses cache to avoid re-downloading if sources haven't changed.
+        Uses preprocessed or cache files to avoid re-downloading if available.
         
         Raises:
             Exception: If all sources fail to load
         """
-        # Try to load from source cache first
+        # Priority 1: Try to load from preprocessed source words (production deployment)
+        preprocessed_source_file = self.PREPROCESSED_DIR / 'source_words.pkl'
+        
+        if preprocessed_source_file.exists():
+            try:
+                logger.info(f"Loading from preprocessed source file: {preprocessed_source_file.name}")
+                with open(preprocessed_source_file, 'rb') as f:
+                    self._words = pickle.load(f)
+                
+                logger.info(
+                    f"✅ Loaded {len(self._words)} words from preprocessed file (no download needed!)"
+                )
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load preprocessed source file: {e}, trying cache...")
+        
+        # Priority 2: Try to load from source cache
         cached_words = self._load_from_source_cache()
         
         if cached_words is not None:
@@ -199,8 +218,8 @@ class WordLoader:
             )
             return
         
-        # Cache miss - need to download from sources
-        logger.info("⚙️ Source cache miss - downloading from sources...")
+        # Priority 3: No preprocessed file or cache - need to download from sources
+        logger.info("⚙️ No preprocessed file or cache - downloading from sources...")
         
         all_words = set()  # Use set to automatically deduplicate
         successful_loads = 0
@@ -464,6 +483,40 @@ class WordLoader:
         cache_key = self._get_cache_key(remove_plurals, remove_conjugated_verbs)
         return self.CACHE_DIR / f"filtered_{cache_key}.pkl"
     
+    def _get_preprocessed_filepath(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> Path:
+        """Get preprocessed file path for given filter settings."""
+        filename = f"words_p{int(remove_plurals)}_v{int(remove_conjugated_verbs)}.pkl"
+        return self.PREPROCESSED_DIR / filename
+    
+    def _load_from_preprocessed(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> Optional[List[str]]:
+        """
+        Load filtered words from preprocessed files (no SpaCy needed).
+        These files are generated locally and committed to the repo.
+        
+        Args:
+            remove_plurals: Plural filter setting
+            remove_conjugated_verbs: Verb filter setting
+        
+        Returns:
+            List of preprocessed filtered words, or None if file not found
+        """
+        preprocessed_file = self._get_preprocessed_filepath(remove_plurals, remove_conjugated_verbs)
+        
+        if preprocessed_file.exists():
+            try:
+                logger.info(f"Loading from preprocessed file: {preprocessed_file.name}")
+                with open(preprocessed_file, 'rb') as f:
+                    words = pickle.load(f)
+                
+                logger.info(f"✅ Loaded {len(words)} preprocessed words (no SpaCy needed!)")
+                return words
+            except Exception as e:
+                logger.warning(f"Failed to load preprocessed file: {e}")
+                return None
+        
+        logger.debug(f"Preprocessed file not found: {preprocessed_file.name}")
+        return None
+    
     def _load_from_disk_cache(self, remove_plurals: bool, remove_conjugated_verbs: bool) -> Optional[List[str]]:
         """
         Load filtered words from disk cache.
@@ -563,7 +616,20 @@ class WordLoader:
         
         original_count = len(self._words)
         
-        # Try to load from disk cache first
+        # Priority 1: Try to load from preprocessed files (fastest, no SpaCy needed)
+        preprocessed_words = self._load_from_preprocessed(remove_plurals, remove_conjugated_verbs)
+        
+        if preprocessed_words is not None:
+            # Preprocessed file found! No SpaCy processing needed
+            self._words = preprocessed_words
+            removed = original_count - len(self._words)
+            logger.info(
+                f"✅ Used preprocessed file - {removed} words filtered. "
+                f"{len(self._words)} words remaining. (No SpaCy needed!)"
+            )
+            return removed
+        
+        # Priority 2: Try to load from disk cache
         cached_words = self._load_from_disk_cache(remove_plurals, remove_conjugated_verbs)
         
         if cached_words is not None:
@@ -576,8 +642,8 @@ class WordLoader:
             )
             return removed
         
-        # Cache miss - need to process
-        logger.info("⚙️ Cache miss - processing words with filters...")
+        # Priority 3: No preprocessed file or cache - need to process with SpaCy
+        logger.info("⚙️ No preprocessed file or cache - processing words with filters...")
         
         if use_spacy:
             filtered_words = self._filter_with_spacy(remove_plurals, remove_conjugated_verbs)
