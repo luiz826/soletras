@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || ''
+
 function App() {
   const [allowedLetters, setAllowedLetters] = useState('')
   const [requiredLetter, setRequiredLetter] = useState('')
@@ -30,7 +32,7 @@ function App() {
         params.append('max_length', maxLength)
       }
 
-      const response = await fetch(`/api/search?${params}`)
+      const response = await fetch(`${API_URL}/api/search?${params}`)
       const data = await response.json()
 
       if (!response.ok) {

@@ -25,7 +25,8 @@ class Config:
         # Default word sources - multiple dictionaries for comprehensive coverage
         WORD_SOURCES = [
             'https://www.ime.usp.br/~pf/dicios/br-sem-acentos.txt',
-            'http://200.17.137.109:8081/novobsi/Members/cicerog/disciplinas/introducao-a-programacao/arquivos-2015-2/algoritmos/Lista-de-Palavras.txt'
+            'http://200.17.137.109:8081/novobsi/Members/cicerog/disciplinas/introducao-a-programacao/arquivos-2015-2/algoritmos/Lista-de-Palavras.txt',
+            'https://cgit.freedesktop.org/libreoffice/dictionaries/plain/pt_BR/pt_BR.dic'
         ]
     
     # Legacy support - single source (deprecated but maintained for compatibility)

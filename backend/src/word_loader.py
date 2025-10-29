@@ -178,8 +178,20 @@ class WordLoader:
             List of words
         """
         with urllib.request.urlopen(url, timeout=30) as response:
-            content = response.read().decode('utf-8', errors='ignore')
-            return self._parse_content(content)
+            # Try different encodings for .dic files
+            if url.endswith('.dic'):
+                try:
+                    content = response.read().decode('latin-1')
+                except:
+                    content = response.read().decode('utf-8', errors='ignore')
+            else:
+                content = response.read().decode('utf-8', errors='ignore')
+            
+            # Use special parsing for .dic files
+            if url.endswith('.dic'):
+                return self._parse_dic_content(content)
+            else:
+                return self._parse_content(content)
     
     def _load_from_file(self, filepath: str) -> List[str]:
         """
@@ -194,9 +206,19 @@ class WordLoader:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Word file not found: {filepath}")
         
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-            return self._parse_content(content)
+        # Use special parsing for .dic files
+        if filepath.endswith('.dic'):
+            try:
+                with open(filepath, 'r', encoding='latin-1') as f:
+                    content = f.read()
+            except:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+            return self._parse_dic_content(content)
+        else:
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                return self._parse_content(content)
     
     def _parse_content(self, content: str) -> List[str]:
         """
@@ -241,6 +263,71 @@ class WordLoader:
                     words.append(word)
         
         return words
+    
+    def _parse_dic_content(self, content: str) -> List[str]:
+        """
+        Parse LibreOffice .dic file content.
+        
+        Special handling for .dic files:
+        - Skip first line (word count)
+        - Remove suffix markers (e.g., "palavra/123")
+        - Split compound words with hyphens
+        - Skip city names (words ending with uppercase 2-letter codes like -SP, -RJ)
+        
+        Args:
+            content: Raw text content from .dic file
+        
+        Returns:
+            List of cleaned, normalized words
+        """
+        palavras = set()
+        lines = content.split('\n')
+        
+        for i, linha in enumerate(lines):
+            # Skip first line (word count)
+            if i == 0:
+                continue
+            
+            linha = linha.strip()
+            
+            # Skip empty lines
+            if not linha:
+                continue
+            
+            # Remove suffix markers (e.g., "palavra/123")
+            if '/' in linha:
+                linha = linha.split('/')[0].strip()
+            
+            # Split compound words by hyphen
+            partes = linha.split('-')
+            sufixo = partes[-1]
+            
+            # Skip city names (words ending with uppercase 2-letter codes like -SP, -RJ)
+            if len(sufixo) == 2 and sufixo.upper() == sufixo:
+                continue
+            
+            # Convert to lowercase
+            palavra = linha.lower()
+            
+            # Add full compound word if valid
+            if palavra and any(c.isalpha() for c in palavra):
+                # Remove non-alphabetic characters except hyphens
+                palavra_limpa = ''.join(c for c in palavra if c.isalpha() or c == '-')
+                if palavra_limpa:
+                    palavras.add(palavra_limpa)
+            
+            # Add individual parts of compound words
+            if len(partes) > 1:
+                for parte in partes:
+                    parte = parte.lower().strip()
+                    if parte and any(c.isalpha() for c in parte):
+                        # Remove non-alphabetic characters
+                        parte_limpa = ''.join(c for c in parte if c.isalpha())
+                        if parte_limpa:
+                            palavras.add(parte_limpa)
+        
+        logger.debug(f"Parsed .dic file: {len(palavras)} unique words")
+        return sorted(list(palavras))
     
     def filter_words(
         self,
