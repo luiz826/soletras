@@ -1,0 +1,28 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    # Executa a cada 10 minutos
+    - cron: '*/10 * * * *'
+  # Permite execução manual
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping backend para evitar hibernação
+        run: |
+          echo "Fazendo ping no backend..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://soletras-backend.onrender.com/api/health)
+          echo "Status code: $response"
+          
+          if [ $response -eq 200 ]; then
+            echo "✅ Backend está ativo!"
+          else
+            echo "⚠️ Backend retornou status $response"
+          fi
+      
+      - name: Log timestamp
+        run: echo "Ping executado em $(date)"
