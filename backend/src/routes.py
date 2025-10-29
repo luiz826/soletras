@@ -74,8 +74,7 @@ def search_words():
         # Get filter parameters
         filter_plurals = request.args.get('filter_plurals', 'false').lower() == 'true'
         filter_conjugated_verbs = request.args.get('filter_conjugated_verbs', 'false').lower() == 'true'
-        import pdb
-        pdb.set_trace()
+
         # Apply filters if requested and word_loader is available
         if (filter_plurals or filter_conjugated_verbs) and word_loader:
             # Try to get from cache first
