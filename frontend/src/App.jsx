@@ -34,7 +34,7 @@ function App() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to search')
+        throw new Error(data.error || 'Falha na busca')
       }
 
       setResults(data)
@@ -49,14 +49,14 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>🔤 Soletras</h1>
-        <p>Brazilian Word Search Game</p>
+        <p>Busca de Palavras em Português</p>
       </header>
 
       <main className="app-main">
         <form onSubmit={handleSearch} className="search-form">
           <div className="form-group">
             <label htmlFor="allowed-letters">
-              Allowed Letters *
+              Letras Permitidas *
             </label>
             <input
               id="allowed-letters"
@@ -67,12 +67,12 @@ function App() {
               required
               className="input"
             />
-            <small>Letters you can use to form words</small>
+            <small>Letras que você pode usar para formar palavras</small>
           </div>
 
           <div className="form-group">
             <label htmlFor="required-letter">
-              Required Letter *
+              Letra Obrigatória *
             </label>
             <input
               id="required-letter"
@@ -84,13 +84,13 @@ function App() {
               required
               className="input"
             />
-            <small>Letter that must appear in all words</small>
+            <small>Letra que deve aparecer em todas as palavras</small>
           </div>
 
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="min-length">
-                Min Length *
+                Tamanho Mínimo *
               </label>
               <input
                 id="min-length"
@@ -106,7 +106,7 @@ function App() {
 
             <div className="form-group">
               <label htmlFor="max-length">
-                Max Length
+                Tamanho Máximo
               </label>
               <input
                 id="max-length"
@@ -115,7 +115,7 @@ function App() {
                 onChange={(e) => setMaxLength(e.target.value)}
                 min={4}
                 max={20}
-                placeholder="Optional"
+                placeholder="Opcional"
                 className="input"
               />
             </div>
@@ -161,7 +161,7 @@ function App() {
             className="btn-primary"
             disabled={loading}
           >
-            {loading ? 'Searching...' : 'Search Words'}
+            {loading ? 'Buscando...' : 'Buscar Palavras'}
           </button>
         </form>
 
@@ -174,16 +174,16 @@ function App() {
         {results && (
           <div className="results">
             <div className="results-header">
-              <h2>Found {results.count} words</h2>
+              <h2>Encontradas {results.count} palavras</h2>
               <div className="results-info">
-                <span>Letters: {results.query.allowed_letters}</span>
-                <span>Required: {results.query.required_letter}</span>
-                <span>Length: {results.query.min_length}{results.query.max_length ? `-${results.query.max_length}` : '+'}</span>
+                <span>Letras: {results.query.allowed_letters}</span>
+                <span>Obrigatória: {results.query.required_letter}</span>
+                <span>Tamanho: {results.query.min_length}{results.query.max_length ? `-${results.query.max_length}` : '+'}</span>
                 {results.query.filter_plurals && (
-                  <span className="filter-badge">🚫 Plurals</span>
+                  <span className="filter-badge">🚫 Plurais</span>
                 )}
                 {results.query.filter_conjugated_verbs && (
-                  <span className="filter-badge">🚫 Conjugated</span>
+                  <span className="filter-badge">🚫 Conjugados</span>
                 )}
               </div>
             </div>
@@ -198,7 +198,7 @@ function App() {
 
             {results.count === 0 && (
               <p className="no-results">
-                No words found with these criteria. Try different letters or disable filters!
+                Nenhuma palavra encontrada com estes critérios. Tente letras diferentes ou desabilite os filtros!
               </p>
             )}
           </div>
@@ -206,7 +206,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Powered by Brazilian Portuguese word database</p>
+        <p>Alimentado por base de dados de palavras em Português Brasileiro</p>
       </footer>
     </div>
   )
